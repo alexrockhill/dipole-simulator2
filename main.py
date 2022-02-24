@@ -8,8 +8,7 @@ from tqdm import tqdm
 import pandas as pd
 import mne
 import nibabel as nib
-import json
-from shutil import copyfile
+import matplotlib.pyplot as plt
 
 data_path = mne.datasets.sample.data_path()
 subjects_dir = op.join(data_path, 'subjects')
@@ -35,17 +34,23 @@ ico = mne.surface._get_ico_surface(grade=2)['rr']
 angles = mne.transforms._cart_to_sph(ico)[:, 1:]
 # for the approximate angular step
 # np.rad2deg(np.min(np.linalg.norm(angles[0] - angles[1:], axis=1)))
-pd.DataFrame(dict(zip(('theta', 'phi'), angles[:, 1:].T))).to_csv(
+pd.DataFrame(dict(zip(('theta', 'phi'), angles.T))).to_csv(
     op.join('doc', '_data', 'angles.csv'), index=False)
 
-n_dipoles = fwd['source_rr'].shape[0]
-vertices = [fwd['src'][0]['vertno']]
+# save colormap
+cmap = plt.get_cmap('RdBu_r')
+cmap_data = np.array([cmap(val) for val in np.linspace(0, 1, 101)])
+pd.DataFrame(dict(zip(('r', 'g', 'b', 'a'), cmap_data.T))).to_csv(
+    op.join('doc', '_data', 'cmap.csv'), index=False)
 
+n_dipoles = fwd['source_rr'].shape[0]
 # Would be used for inefficient equivalent computation below:
+#   vertices = [fwd['src'][0]['vertno']]
 #   data = np.zeros((n_dipoles, 3, 1))
 #   stc = mne.VolVectorSourceEstimate(data, vertices=vertices,
 #                                     subject='sample', tmin=0, tstep=1)
 
+dipole_data = dict()
 for vert_idx in tqdm(range(n_dipoles)):
     for angle_idx, ori in enumerate(ico):
         # the leadfield matrix (fwd['sol']['data']) has three vectors for the
@@ -58,9 +63,22 @@ for vert_idx in tqdm(range(n_dipoles)):
         #   stc.data = data
         #   evoked = mne.simulation.simulate_evoked(
         #        fwd, stc, evoked.info, cov=None, nave=np.inf, verbose=False)
-        pd.DataFrame(evoked_data.flatten()).to_csv(op.join(
-            'doc', '_data', 'dipole_data',
-            f'vi-{vert_idx}_ai-{angle_idx}.csv'), header=False, index=False)
+        dipole_data[(vert_idx, angle_idx)] = evoked_data.flatten()
+
+
+# params for scaling evoked
+evoked_data_all = np.array(list(dipole_data.values()))
+evoked_data_min = evoked_data_all.min()
+evoked_data_range = evoked_data_all.max() - evoked_data_min
+
+# save each separate so not all have to be loaded at once
+for (vert_idx, angle_idx), evoked_data in tqdm(dipole_data.items()):
+    # make each one an index of the colormap instead of raw data
+    pd.DataFrame((((evoked_data - evoked_data_min) / evoked_data_range
+                   ).round(2) * 100).astype(int)).to_csv(
+        op.join('doc', '_data', 'dipole_data',
+                f'vi-{vert_idx}_ai-{angle_idx}.csv'),
+        header=False, index=False)
 
 
 # surfaces and points
@@ -71,24 +89,8 @@ pd.DataFrame(dict(zip(('R', 'A', 'S'), fwd['source_rr'].T))).to_csv(
 
 sensor_rr = np.array([mne.transforms.apply_trans(trans, ch['loc'][:3])
                       for ch in evoked.info['chs']])
-pd.DataFrame(dict(zip(('R', 'A', 'S'), sensor_rr.T)),
-             index=evoked.ch_names).to_csv(
-    op.join('doc', '_data', 'sensor_locs.csv'))
-
-for ch_type in ('grad', 'mag', 'eeg'):
-    picks, pos, merge_channels, names, ch_type, sphere, clip_origin = \
-        mne.viz.topomap._prepare_topomap_plot(evoked, ch_type)
-    outlines = mne.viz.topomap._make_head_outlines(
-        sphere, pos, outlines='head', clip_origin=clip_origin)
-    if len(picks) != pos.shape[0]:  # grad, two channels in one place
-        pos = np.ravel(np.column_stack((pos, pos))).reshape(-1, 2)
-    pd.DataFrame(dict(zip(('x', 'y'), pos.T)),
-                 index=[evoked.ch_names[idx] for idx in picks]).to_csv(
-        op.join('doc', '_data', f'{ch_type}_sensors_flat.csv'))
-    for ol in ('head', 'nose', 'ear_left', 'ear_right', 'mask_pos'):
-        pd.DataFrame(dict(x=outlines[ol][0], y=outlines[ol][1])).to_csv(
-            op.join('doc', '_data', f'{ch_type}_{ol}_outlines.csv'))
-
+pd.DataFrame(dict(zip(('R', 'A', 'S'), sensor_rr.T))).to_csv(
+    op.join('doc', '_data', 'sensor_locs.csv'), index=False)
 
 head = mne._freesurfer._get_head_surface(
     'head', 'sample', subjects_dir)  # could be seghead for better res
@@ -97,6 +99,7 @@ pd.DataFrame(dict(zip(('R', 'A', 'S'), head['rr'].T))).to_csv(
 pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), head['tris'].T))).to_csv(
     op.join('doc', '_data', 'head_tris.csv'), index=False)
 
+# brain surfaces, includes cerebellum and subcortical
 aseg = nib.load(op.join(subjects_dir, 'sample', 'mri', 'aseg.mgz'))
 aseg_data = np.asarray(aseg.dataobj)
 vox_mri_t = aseg.header.get_vox2ras_tkr()
@@ -113,13 +116,42 @@ brain_tris = np.concatenate([surf[1] for surf in brain_surfs])
 pd.DataFrame(dict(zip(('R', 'A', 'S'), brain_rr.T))).to_csv(
     op.join('doc', '_data', 'brain_verts.csv'), index=False)  # 4 MB
 pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), brain_tris.T))).to_csv(
-    op.join('doc', '_data', 'brain_tris.csv'), index=False)
+    op.join('doc', '_data', 'brain_tris.csv'), index=False)  # 4 MB
 
+# MEG helmet surface
 helmet = mne.surface.get_meg_helmet_surf(evoked.info, trans)
 pd.DataFrame(dict(zip(('R', 'A', 'S'), helmet['rr'].T))).to_csv(
     op.join('doc', '_data', 'helmet_verts.csv'), index=False)
 pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), helmet['tris'].T))).to_csv(
     op.join('doc', '_data', 'helmet_tris.csv'), index=False)
+
+# we need to know which type each channel is
+ch_types = np.empty((len(fwd.ch_names),), dtype=object)
+ch_types[mne.pick_types(fwd['info'], meg='grad')] = 'grad'
+ch_types[mne.pick_types(fwd['info'], meg='mag')] = 'mag'
+ch_types[mne.pick_types(fwd['info'], eeg=True)] = 'eeg'
+pd.DataFrame(dict(ch_type=list(ch_types))).to_csv(
+    op.join('doc', '_data', 'ch_types.csv'), index=False)
+
+sensor_rr_flat = np.zeros((len(fwd.ch_names), 2)) * np.nan
+for ch_type in ('grad', 'mag', 'eeg'):
+    picks, pos, merge_channels, names, ch_type, sphere, clip_origin = \
+        mne.viz.topomap._prepare_topomap_plot(evoked, ch_type)
+    outlines = mne.viz.topomap._make_head_outlines(
+        sphere, pos, outlines='head', clip_origin=clip_origin)
+    if len(picks) != pos.shape[0]:  # grad, two channels in one place
+        pos = np.ravel(np.column_stack((pos, pos))).reshape(-1, 2)
+    for pick, ch_pos in zip(picks, pos):
+        if evoked.ch_names[pick] in fwd.ch_names:
+            sensor_rr_flat[fwd.ch_names.index(evoked.ch_names[pick])] = ch_pos
+    for ol in ('head', 'nose', 'ear_left', 'ear_right', 'mask_pos'):
+        pd.DataFrame(dict(x=outlines[ol][0], y=outlines[ol][1])).to_csv(
+            op.join('doc', '_data', f'{ch_type}_{ol}_outlines.csv'),
+            index=False)
+
+assert not np.isnan(sensor_rr_flat).any()
+pd.DataFrame(dict(zip(('x', 'y'), sensor_rr_flat.T))).to_csv(
+    op.join('doc', '_data', 'sensors_flat_locs.csv'), index=False)
 
 
 # %%

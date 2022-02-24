@@ -3,14 +3,15 @@
   <head>
     <meta charset="utf-8">
     <title>Dipole Simulator</title>
-    <link rel="stylesheet" href="./dipole_simulator.css" type="text/css">
+    <link rel="stylesheet" href="../_static/dipole_simulator.css" type="text/css">
     <script src="../_js/gl-matrix-min.js" defer></script>
-    <script src="webgl-demo.js" defer></script>
+    <script src="../_js/dipole_simulator.js" defer></script>
+    <script> const mobile = /Mobi/i.test(window.navigator.userAgent);</script>
   </head>
 
   <body>
     <div id="container">
-      <div class="panel" id="sliders">
+      <div id="sliders">
         <label class="label" for="x">x:</label>
         <input type="range" min="1" max="100" value="50" class="slider" id="x">
         <label class="label" for="y">y:</label>
@@ -22,14 +23,30 @@
         <label class="label" for="phi">&Phi;:</label>
         <input type="range" min="1" max="100" value="50" class="slider" id="phi">
       </div>
-      <div class="panel" id="dipoles">
+      <div id="dipoles">
         <canvas id="glcanvas"></canvas>
       </div>
-      <div class="panel" id="sensors_3D">
-        Grad Mag EEG
+      <div id="sensors_3D">
+        <div class="output_plot" id="grad_3d">
+          Grad
+        </div>
+        <div class="output_plot" id="mag_3d">
+          Mag
+        </div>
+        <div class="output_plot" id="eeg_3d">
+          EEG
+        </div>
       </div>
-      <div class="panel" id="sensors_2D">
-        Grad Mag EEG
+      <div id="sensors_2D">
+        <div class="output_plot" id="grad_2d">
+          Grad
+        </div>
+        <div class="output_plot" id="mag_2d">
+          Mag
+        </div>
+        <div class="output_plot" id="eeg_2d">
+          EEG
+        </div>
       </div>
     </div>
   </body>

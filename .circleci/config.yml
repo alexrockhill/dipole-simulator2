@@ -119,32 +119,24 @@ jobs:
 workflows:
   commit:
     jobs:
-      - docs-build
+      - flake
+      - clean
+      - doc
+      - main
       - docs-deploy:
           requires:
-            - docs-build
+            - doc
+            - main
           filters:
             branches:
               only: main
 
-  nightly:
-    jobs:
-      - all
-
-    triggers:
-      - schedule:
-          cron: "0 4 * * *"
-          filters:
-            branches:
-              only:
-                - main
-
   weekly:
     jobs:
-      - all
-      - link-check:
-          requires:
-            - all
+      - flake
+      - clean
+      - doc
+      - main
 
     triggers:
       - schedule:
