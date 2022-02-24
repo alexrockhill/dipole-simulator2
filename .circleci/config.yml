@@ -191,33 +191,33 @@ jobs:
             path: doc/_build/linkcheck
             destination: linkcheck
 
-  deploy:
-    # will only be run on main branch
-    docker:
-      - image: ubuntu-2004:202111-01
-    steps:
-      - checkout
+    deploy:
+      # will only be run on main branch
+      docker:
+        - image: ubuntu-2004:202111-01
+      steps:
+        - checkout
 
-      - attach_workspace:
-          at: doc/_build
+        - attach_workspace:
+            at: doc/_build
 
-      - run:
-          name: Install and configure dependencies
-          # do not update gh-pages above 3.0.0
-          # see: https://github.com/tschaub/gh-pages/issues/354
-          command: |
-            npm install gh-pages@3.0.0
-            git config --global user.email "circle@mne.com"
-            git config --global user.name "Circle Ci"
+        - run:
+            name: Install and configure dependencies
+            # do not update gh-pages above 3.0.0
+            # see: https://github.com/tschaub/gh-pages/issues/354
+            command: |
+              npm install gh-pages@3.0.0
+              git config --global user.email "circle@mne.com"
+              git config --global user.name "Circle Ci"
 
-      - add_ssh_keys:
-          fingerprints:
-            - "7f:74:00:17:2b:1a:7d:68:56:68:6b:64:b5:e0:7f:91"
+        - add_ssh_keys:
+            fingerprints:
+              - "7f:74:00:17:2b:1a:7d:68:56:68:6b:64:b5:e0:7f:91"
 
-      - run:
-          # push built docs into the `dev` directory on the `gh-pages` branch
-          name: Deploy docs to gh-pages branch
-          command: node_modules/gh-pages/bin/gh-pages.js --dotfiles --message "doc updates [skip ci]" --dist doc/_build/html --dest ./dev
+        - run:
+            # push built docs into the `dev` directory on the `gh-pages` branch
+            name: Deploy docs to gh-pages branch
+            command: node_modules/gh-pages/bin/gh-pages.js --dotfiles --message "doc updates [skip ci]" --dist doc/_build/html --dest ./dev
 
 workflows:
   default:
