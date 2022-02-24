@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Dipole Simulator</title>
+    <link rel="stylesheet" href="./dipole_simulator.css" type="text/css">
+    <script src="../_js/gl-matrix-min.js" defer></script>
+    <script src="webgl-demo.js" defer></script>
+  </head>
+
+  <body>
+    <div id="container">
+      <div class="panel" id="sliders">
+        <label class="label" for="x">x:</label>
+        <input type="range" min="1" max="100" value="50" class="slider" id="x">
+        <label class="label" for="y">y:</label>
+        <input type="range" min="1" max="100" value="50" class="slider" id="y">
+        <label class="label" for="z">z:</label>
+        <input type="range" min="1" max="100" value="50" class="slider" id="z">
+        <label class="label" for="theta">&Theta;:</label>
+        <input type="range" min="1" max="100" value="50" class="slider" id="theta">
+        <label class="label" for="phi">&Phi;:</label>
+        <input type="range" min="1" max="100" value="50" class="slider" id="phi">
+      </div>
+      <div class="panel" id="dipoles">
+        <canvas id="glcanvas"></canvas>
+      </div>
+      <div class="panel" id="sensors_3D">
+        Grad Mag EEG
+      </div>
+      <div class="panel" id="sensors_2D">
+        Grad Mag EEG
+      </div>
+    </div>
+  </body>
+</html>
