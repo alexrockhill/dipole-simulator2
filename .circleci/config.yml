@@ -198,25 +198,35 @@ jobs:
           command: node_modules/gh-pages/bin/gh-pages.js --dotfiles --message "doc updates [skip ci]" --dist doc/_build/html --dest ./dev
 
 workflows:
-  commit:
+  default:
     jobs:
-      - build_docs
-      - deploy_docs:
+      - build_docs:
+          name: build_docs
+      - deploy:
+          name: deploy
           requires:
-            - doc
-            - main
+            - build_docs
           filters:
             branches:
-              only: main
+              only:
+                - main
 
   weekly:
     jobs:
-      - build_docs
-        scheduled: "true"
-
+      - build_docs:
+          name: build_docs
+      - deploy:
+          name: deploy
+          requires:
+            - build_docs
+          filters:
+            branches:
+              only:
+                - main
     triggers:
       - schedule:
-          cron: "0 4 * * 0"
+          # "At 00:00 on Sunday" should be often enough
+          cron: "0 0 * * 0"
           filters:
             branches:
               only:
