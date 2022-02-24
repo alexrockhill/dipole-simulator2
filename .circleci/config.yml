@@ -212,8 +212,6 @@ workflows:
   weekly:
     jobs:
       - build_docs
-        name: weekly_build
-        scheduled: "true"
 
     triggers:
       - schedule:
