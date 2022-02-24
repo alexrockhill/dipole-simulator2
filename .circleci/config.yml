@@ -201,8 +201,10 @@ workflows:
   default:
     jobs:
       - build_docs:
+          scheduled: "false"
           name: build_docs
       - deploy:
+          scheduled: "false"
           name: deploy
           requires:
             - build_docs
