@@ -1,28 +1,119 @@
 # See: https://circleci.com/blog/deploying-documentation-to-github-pages-with-continuous-integration/
 version: 2.1
 
+_xvfb: &xvfb
+  name: Start Xvfb virtual framebuffer
+  command: |
+    echo "export DISPLAY=:99" >> $BASH_ENV
+    /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset -nolisten tcp -nolisten unix
+
 jobs:
-  docs-build:
-    machine:
-        image: ubuntu-2004:202111-01
+  build_docs:
+    docker:
+        - image: cimg/base:stable-18.04
     steps:
+        - restore_cache:
+            keys:
+              - source-cache
         - checkout
-
-        # restore cache from last build. Unless __init__.py has changed since then
-        - restore_cache:
-            keys:
-              - data-cache-5-{{ checksum "./tutorial.py" }}
-
-        # Also restore pip cache to speed up installations
-        - restore_cache:
-            keys:
-              - pip-cache-1-{{ checksum "./requirements.txt" }}
+        - run:
+            name: Complete checkout
+            command: |
+              set -e
+              if ! git remote -v | grep upstream; then
+                git remote add upstream https://github.com/alexrockhill/dipole-simulator2
+              fi
+              git remote set-url upstream https://github.com/alexrockhill/dipole-simulator2
+              git fetch upstream
+        - save_cache:
+            key: source-cache
+            paths:
+              - ".git"
+        - run:
+            name: Check-skip
+            command: |
+              set -e
+              export COMMIT_MESSAGE=$(git log --format=oneline -n 1);
+              if [[ -v CIRCLE_PULL_REQUEST ]] && ([[ "$COMMIT_MESSAGE" == *"[skip circle]"* ]] || [[ "$COMMIT_MESSAGE" == *"[circle skip]"* ]]); then
+                echo "Skip detected, exiting job ${CIRCLE_JOB} for PR ${CIRCLE_PULL_REQUEST}."
+                circleci-agent step halt;
+              fi
+        - run:
+            name: Merge with upstream and triage run
+            command: |
+              set -e
+              echo $(git log -1 --pretty=%B) | tee gitlog.txt
+              echo ${CI_PULL_REQUEST//*pull\//} | tee merge.txt
+              if [[ $(cat merge.txt) != "" ]]; then
+                echo "Merging $(cat merge.txt)";
+                git pull --ff-only upstream "refs/pull/$(cat merge.txt)/merge";
+              else
+                if [[ "$CIRCLE_BRANCH" == "main" ]]; then
+                  KIND=dev
+                else
+                  KIND=stable
+                fi
+                export COMMIT_MESSAGE=$(git log --format=oneline -n 1);
+                if [[ "<< parameters.scheduled >>" == "true" ]]; then
+                  echo "Scheduled full build detected, checking if it's required."
+                  wget https://mne.tools/${KIND}/_version.txt;
+                  REMOTE_VERSION=$(cat _version.txt)
+                  THIS_VERSION=$(git rev-parse HEAD)
+                  echo "Current ${KIND} SHA: ${REMOTE_VERSION}"
+                  echo "This    ${KIND} SHA: ${THIS_VERSION}"
+                  if [[ "${THIS_VERSION}" != "${REMOTE_VERSION}" ]]; then
+                    echo "Rebuild required."
+                  else
+                    echo "Rebuild skipped."
+                    circleci-agent step halt;
+                  fi
+                elif [[ "$COMMIT_MESSAGE" == *"[circle deploy]"* ]]; then
+                  echo "Forced deployed build detected, building and deploying docs";
+                else
+                  echo "Waiting until scheduled run to build ${KIND} docs, exiting job ${CIRCLE_JOB}."
+                  circleci-agent step halt;
+                fi
+              fi
 
         - run:
-            name: Setup Python3 environment
+            name: Set BASH_ENV
             command: |
-                python3 -m venv /home/circleci/dipole_env
-                echo "source /home/circleci/dipole_env/bin/activate" >> $BASH_ENV
+              set -e
+              sudo apt update -qq
+              sudo apt install -qq libosmesa6 libglx-mesa0 libopengl0 libglx0 libdbus-1-3 \
+                libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+                libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-xinerama0 \
+                graphviz optipng \
+                python3.8-venv python3-venv \
+                xvfb libxft2 ffmpeg
+              python3.8 -m venv ~/python_env
+              echo "set -e" >> $BASH_ENV
+              echo "export OPENBLAS_NUM_THREADS=4" >> $BASH_ENV
+              echo "export XDG_RUNTIME_DIR=/tmp/runtime-circleci" >> $BASH_ENV
+              echo "export MNE_FULL_DATE=true" >> $BASH_ENV
+              echo "export MNE_3D_OPTION_ANTIALIAS=false" >> $BASH_ENV
+              source tools/get_minimal_commands.sh
+              echo "export MNE_3D_BACKEND=pyvistaqt" >> $BASH_ENV
+              echo "export MNE_BROWSER_BACKEND=qt" >> $BASH_ENV
+              echo "export MNE_BROWSER_PRECOMPUTE=false" >> $BASH_ENV
+              echo "export PATH=~/.local/bin/:$PATH" >> $BASH_ENV
+              echo "source ~/python_env/bin/activate" >> $BASH_ENV
+              mkdir -p ~/.local/bin
+              ln -s ~/python_env/bin/python ~/.local/bin/python
+              echo "BASH_ENV:"
+              cat $BASH_ENV
+              mkdir -p ~/mne_data
+              touch pattern.txt
+        - run:
+            <<: *xvfb
+
+        # Load pip cache
+        - restore_cache:
+            keys:
+              - pip-cache
+        - restore_cache:
+            keys:
+              - user-install-bin-cache
 
         - run:
             name: Install Python packages
@@ -31,18 +122,40 @@ jobs:
               python -m pip install --upgrade --progress-bar off -r requirements.txt
               python -m pip install --upgrade https://api.github.com/repos/mne-tools/mne-python/zipball/main
 
+        - save_cache:
+            key: pip-cache
+            paths:
+              - ~/.cache/pip
+        - save_cache:
+            key: user-install-bin-cache
+            paths:
+              - ~/.local/lib/python3.8/site-packages
+              - ~/.local/bin
+        - run:
+            name: List packages
+            command: python -m pip list
+
         - run:
             name: Build the documentation
             command: |
-              make
+              make flake clean doc main
+
+        - store_artifacts:
+            path: doc/auto_examples.zip
+
+        - store_artifacts:
+            path: doc/_build/html
+            destination: dev
+
+        - store_artifacts:
+            path: doc/_build/html_stable/
+            destination: stable
 
         - persist_to_workspace:
             root: doc/_build
-            paths: html
-
-        - store_artifacts:
-            path: doc/_build/html/
-            destination: dev
+            paths:
+              - html
+              - html_stable
 
         # Store the data cache
         - save_cache:
@@ -56,7 +169,7 @@ jobs:
             paths:
               - ~/.cache/pip
 
-  docs-deploy:
+  deploy_docs:
     # will only be run on main branch
     docker:
       - image: cimg/node:lts
@@ -84,46 +197,11 @@ jobs:
           name: Deploy docs to gh-pages branch
           command: node_modules/gh-pages/bin/gh-pages.js --dotfiles --message "doc updates [skip ci]" --dist doc/_build/html --dest ./dev
 
-
-  link-check:
-    machine:
-        image: ubuntu-2004:202111-01
-    steps:
-      - checkout
-
-      - attach_workspace:
-          at: doc/_build
-
-      - restore_cache:
-          keys:
-            - pip-cache-1-{{ checksum "./requirements.txt" }}
-
-      - run:
-          name: Setup Python3 environment
-          command: |
-              python3 -m venv /home/circleci/dipole_env
-              echo "source /home/circleci/dipole_env/bin/activate" >> $BASH_ENV
-
-      - run:
-          name: Install Python packages
-          command: |
-            python -m pip install --upgrade --progress-bar off pip
-            python -m pip install --upgrade --progress-bar off -r requirements.txt
-            python -m pip install --upgrade --no-deps https://api.github.com/repos/mne-tools/mne-python/zipball/main
-
-      - run:
-          name: Check links
-          command: |
-            make -C doc linkcheck
-
 workflows:
   commit:
     jobs:
-      - flake
-      - clean
-      - doc
-      - main
-      - docs-deploy:
+      - build_docs
+      - deploy_docs:
           requires:
             - doc
             - main
@@ -133,10 +211,9 @@ workflows:
 
   weekly:
     jobs:
-      - flake
-      - clean
-      - doc
-      - main
+      - build_docs
+        name: weekly_build
+        scheduled: "true"
 
     triggers:
       - schedule:

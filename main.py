@@ -158,7 +158,8 @@ pd.DataFrame(dict(zip(('x', 'y'), sensor_rr_flat.T))).to_csv(
 # Add template to the tutorial html:
 
 # read in html output by sphinx
-tut_fname = op.join('doc', '_build', 'auto_examples', 'plot_tutorial.html')
+tut_fname = op.join('doc', '_build', 'html', 'auto_examples',
+                    'plot_tutorial.html')
 with open(tut_fname, 'r') as fid:
     tut_html = '\n'.join(fid.readlines())
 
@@ -173,7 +174,7 @@ idx = tut_html.index('<script')
 # add our scripts
 tut_html = tut_html[:idx] + """
     <script src="../../_js/gl-matrix-min.js" defer></script>
-    <script src="../../dipole_simulator.js" defer></script>
+    <script src="../../_js/dipole_simulator.js" defer></script>
 """ + tut_html[idx:]
 
 # find the top of the main section where to insert

@@ -3,10 +3,11 @@
 
 # You can set these variables from the command line, and also
 # from the environment for the first two.
-SPHINXOPTS    ?= -nWT --keep-going
-SPHINXBUILD   ?= sphinx-build
-SOURCEDIR     = ./doc
-BUILDDIR      = ./doc/_build
+SPHINXOPTS     ?= -nWT --keep-going
+SPHINXBUILD    ?= sphinx-build
+SOURCEDIR      = ./doc
+BUILDDIR       = ./doc/_build/html
+BUILDDIRSTABLE = ./doc/_build/html_stable
 
 .PHONY: all no-plot clean-pyc clean-cache clean-e clean-doc flake doc doc-noplot link
 
@@ -37,6 +38,9 @@ flake:
 doc:
 	@$(SPHINXBUILD) -b html "$(SOURCEDIR)" "$(BUILDDIR)"
 
+doc-stable:
+	@$(SPHINXBUILD) -b html "$(SOURCEDIR)" "$(BUILDDIRSTABLE)"
+
 doc-noplot:
 	@$(SPHINXBUILD) -D plot_gallery=True -b html "$(SOURCEDIR)" "$(BUILDDIR)"
 
@@ -49,4 +53,4 @@ linkcheck:
 
 # View the built documentation
 view:
-	@python -c "import webbrowser; webbrowser.open_new_tab('file://$(PWD)/doc/_build/index.html')"
+	@python -c "import webbrowser; webbrowser.open_new_tab('file://$(PWD)/doc/_build/html/index.html')"

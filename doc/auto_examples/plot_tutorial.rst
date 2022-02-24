@@ -119,7 +119,7 @@ so only a subset are shown):
     /Users/alexrockhill/software/anaconda3/envs/mne/lib/python3.9/site-packages/mne_qt_browser/_pg_figure.py:2142: RuntimeWarning: Projection vector 'PCA-v3' has been reduced to 30.54% of its original magnitude by subselecting 10/102 of the original channels. If the ignored channels were bad during SSP computation, we recommend recomputing proj (via compute_proj_raw or related functions) with the bad channels properly marked, because computing SSP with bad channels present in the data but unmarked is dangerous (it can bias the PCA used by SSP). On the other hand, if you know that all channels were good during SSP computation, you can safely use info.normalize_proj() to suppress this warning during projection.
       BrowserBase.__init__(self, **kwargs)
 
-    <mne_qt_browser._pg_figure.PyQtGraphBrowser object at 0x14f29b310>
+    <mne_qt_browser._pg_figure.PyQtGraphBrowser object at 0x15856d820>
 
 
 
@@ -154,7 +154,7 @@ look like this:
  .. code-block:: none
 
 
-    <nilearn.plotting.displays._slicers.OrthoSlicer object at 0x158ae0790>
+    <nilearn.plotting.displays._slicers.OrthoSlicer object at 0x161daea90>
 
 
 
@@ -692,7 +692,7 @@ Now, go crazy and simulate a bunch of random dipoles
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** ( 1 minutes  39.903 seconds)
+   **Total running time of the script:** ( 1 minutes  38.106 seconds)
 
 
 .. _sphx_glr_download_auto_examples_plot_tutorial.py:
