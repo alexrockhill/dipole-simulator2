@@ -146,7 +146,7 @@ jobs:
             paths:
               - ~/mne_data/MNE-sample-data  # (3.2 G)
 
-  linkcheck:
+    linkcheck:
       # there are a few files excluded from this for expediency, see Makefile
       parameters:
         scheduled:
