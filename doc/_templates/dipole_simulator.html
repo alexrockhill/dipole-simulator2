@@ -4,8 +4,9 @@
     <meta charset="utf-8">
     <title>Dipole Simulator</title>
     <link rel="stylesheet" href="../_static/dipole_simulator.css" type="text/css">
+    <script type="importmap"> { "imports": { "three": "../_js/three.module.js" } } </script>
     <script src="../_js/gl-matrix-min.js" defer></script>
-    <script src="../_js/dipole_simulator.js" defer></script>
+    <script type="module" src="../_js/wireframe.js" defer></script>
     <script> const mobile = /Mobi/i.test(window.navigator.userAgent);</script>
   </head>
 
@@ -13,39 +14,45 @@
     <div id="container">
       <div id="sliders">
         <label class="label" for="x">x:</label>
-        <input type="range" min="1" max="100" value="50" class="slider" id="x">
+        <input type="range" min="1" class="slider" id="x_range">
         <label class="label" for="y">y:</label>
-        <input type="range" min="1" max="100" value="50" class="slider" id="y">
+        <input type="range" min="1" class="slider" id="y_range">
         <label class="label" for="z">z:</label>
-        <input type="range" min="1" max="100" value="50" class="slider" id="z">
+        <input type="range" min="1" class="slider" id="z_range">
         <label class="label" for="theta">&Theta;:</label>
-        <input type="range" min="1" max="100" value="50" class="slider" id="theta">
+        <input type="range" min="1" class="slider" id="theta_range">
         <label class="label" for="phi">&Phi;:</label>
-        <input type="range" min="1" max="100" value="50" class="slider" id="phi">
+        <input type="range" min="1" class="slider" id="phi_range">
       </div>
       <div id="dipoles">
-        <canvas id="glcanvas"></canvas>
+        <canvas id="dipole_canvas"></canvas>
       </div>
       <div id="sensors_3D">
         <div class="output_plot" id="grad_3d">
           Grad
+          <canvas id="grad_3d_canvas"></canvas>
         </div>
         <div class="output_plot" id="mag_3d">
           Mag
+          <canvas id="mag_3d_canvas"></canvas>
         </div>
         <div class="output_plot" id="eeg_3d">
           EEG
+          <canvas id="eeg_3d_canvas"></canvas>
         </div>
       </div>
       <div id="sensors_2D">
         <div class="output_plot" id="grad_2d">
           Grad
+          <canvas id="grad_2d_canvas"></canvas>
         </div>
         <div class="output_plot" id="mag_2d">
           Mag
+          <canvas id="mag_2d_canvas"></canvas>
         </div>
         <div class="output_plot" id="eeg_2d">
           EEG
+          <canvas id="eeg_2d_canvas"></canvas>
         </div>
       </div>
     </div>

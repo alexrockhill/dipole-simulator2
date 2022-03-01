@@ -1,46 +1,195 @@
-<head> </head>
-<body>
-  <script>
-    const data_dir = '../../doc/_data/';
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Dipole Simulator Test</title>
+  </head>
+  <body>
+  </body>
 
-    function csvToArray(str, delimiter = ",") {
+<script async type="text/javascript">
+  const data_dir = '../_data/';
+  var loaded = 0;
+  var data = {};
 
-      // slice from start of text to the first \n index
-      // use split to create an array from string by delimiter
-      const headers = str.slice(0, str.indexOf("\n")).split(delimiter);
+  const surfaces = ['head', 'brain'];
 
-      // slice from \n index + 1 to the end of the text
-      // use split to create an array of each csv value row
-      const rows = str.slice(str.indexOf("\n") + 1).split("\n");
+  loadCsv('head_tris', 'int');
+  loadCsv('head_verts', 'float');
 
-      // Map the rows
-      // split values from each row into an array
-      // use headers.reduce to create an object
-      // object properties derived from headers:values
-      // the object passed as an element of the array
-      const arr = rows.map(function (row) {
-        const values = row.split(delimiter);
-        const el = headers.reduce(function (object, header, index) {
-          object[header] = values[index];
-          return object;
-        }, {});
-        return el;
-      });
+  loadCsv('brain_tris', 'int');
+  loadCsv('brain_verts', 'float');
 
-      // return the array
-      return arr;
-    }
+  /*const brain_surfaces = [
+    'left-cerebral-white-matter', 'left-cerebral-cortex',
+    'right-cerebral-white-matter', 'right-cerebral-cortex',
+    'left-lateral-ventricle', 'left-inf-lat-vent',
+    'left-cerebellum-cortex', 'left-thalamus-proper',
+    'left-caudate', 'left-putamen', 'left-pallidum',
+    '3rd-ventricle', '4th-ventricle', 'brain-stem',
+    'left-hippocampus', 'left-amygdala', 'left-accumbens-area',
+    'left-ventraldc', 'right-lateral-ventricle',
+    'right-inf-lat-vent', 'right-cerebellum-cortex',
+    'right-thalamus-proper', 'right-caudate', 'right-putamen',
+    'right-pallidum', 'right-hippocampus', 'right-amygdala',
+    'right-accumbens-area', 'right-ventraldc'];
+ 
+  brain_surfaces.forEach(name => loadCsv(name + '_verts', 'float', 'brain_surfaces/'));
+  brain_surfaces.forEach(name => loadCsv(name + '_tris', 'int', 'brain_surfaces/'));
 
-    const request = new XMLHttpRequest();
-    for (const ch_type of ['grad', 'mag', 'eeg']) {
-      request.open("GET", data_dir + ch_type + '_sensors_flat.csv', false);
+  loadCsv('brain_surface_colors', 'float_dict');*/
+
+  function loadCsv(name, type, sub_dir='', solution=false) {
+      /* Load a csv file into an array of rows*/
+      request = new XMLHttpRequest();
+      request.open("GET", data_dir + sub_dir + name + '.csv', false);
       request.overrideMimeType('charset=UTF-8');
       request.onload = function() {
         if (this.readyState == 4 && this.status == 200) {
-            console.log(this.responseText);
+          if (solution) {
+            data['solution'] = this.responseText.split("\n").map(
+              val => parseInt(val));
+          } else {
+            // split by rows, ignore header
+            const rows = this.responseText.slice(
+            this.responseText.indexOf("\n") + 1).split("\n");
+            if (type == 'float') {
+              data[name] = rows.map(row => row.split(",").map(c => parseFloat(c)));
+            } else if (type == 'int') {
+              data[name] = rows.map(row => row.split(",").map(c => parseInt(c)));
+            } else if (type == 'float_dict') {
+              data[name] = rows.map(row => row.split(",").map(
+                (c, i) => (i == 0) ? c : parseFloat(c)));
+            } else {
+              data[name] = rows.map(row => row.split(","));
+            }
+            data[name] = data[name].slice(0, data[name].length - 1); // extra new line
+          }
+          loaded++;
+          console.log('Number loaded:' + loaded + ', current: ' + name);
+          /*if (loaded == 2) {
+            init();
+            animate();
+          }*/
         }
       }
       request.send();
     }
-  </script>
-</body>
+</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "../_js/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+let camera, scene, renderer;
+
+let meshes = {};
+
+init();
+animate();
+
+function init() {
+
+  camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 10 );
+  camera.position.y = -0.25;
+  camera.lookAt(0, 0, 0);
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color( 0x050505 );
+
+  const light = new THREE.HemisphereLight();
+  scene.add( light );
+
+  const light1 = new THREE.DirectionalLight( 0xffffff, 0.5 );
+  light1.position.set( 1, 1, 1 );
+  scene.add( light1 );
+
+  const light2 = new THREE.DirectionalLight( 0xffffff, 1.5 );
+  light2.position.set( 0, - 1, 0 );
+  scene.add( light2 );
+
+  const geometries = {};
+  const materials = {};
+
+  materials['head'] = new THREE.MeshBasicMaterial( {
+    side: THREE.DoubleSide, vertexColors: true, wireframe: true,
+  } );
+  materials['brain'] = new THREE.MeshPhongMaterial( {
+    color: 0xaaaaaa, specular: 0xffffff, shininess: 50, opacity: 0.5,
+    side: THREE.DoubleSide, vertexColors: true, transparent: true
+  } );
+  materials['brain'].depthWrite = false;
+
+  for (let i = 0; i < surfaces.length; i++) {
+    geometries[surfaces[i]] = new THREE.BufferGeometry();
+
+    const colors = data[surfaces[i] + '_verts'].map(vert => [0.5, 0.5, 0.5, 0.25]).flat();
+    geometries[surfaces[i]].setIndex( data[surfaces[i] + '_tris'].flat() );
+    geometries[surfaces[i]].setAttribute( 'position', new THREE.Float32BufferAttribute( 
+      data[surfaces[i] + '_verts'].flat(), 3 ) );
+    geometries[surfaces[i]].computeVertexNormals();
+    geometries[surfaces[i]].setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 4 ) );
+    
+    meshes[surfaces[i]] = new THREE.Mesh(
+      geometries[surfaces[i]], materials['brain'] );
+    scene.add( meshes[surfaces[i]] );
+  }
+
+  /*materials['brain_surfaces'] = new THREE.MeshBasicMaterial( {
+      side: THREE.DoubleSide, vertexColors: true, wireframe: true,
+    } );
+  var brain_colors;
+  for (let i = 0; i < brain_surfaces.length; i++) {
+    geometries[brain_surfaces[i]] = new THREE.BufferGeometry();
+    brain_colors = data[brain_surfaces[i] + '_verts'].map(
+      vert => data['brain_surface_colors'].filter(
+        c => c[0] == brain_surfaces[i])[0].slice(1)).flat();
+    geometries[brain_surfaces[i]].setIndex( data[brain_surfaces[i] + '_tris'].flat() );
+    geometries[brain_surfaces[i]].setAttribute( 'position', new THREE.Float32BufferAttribute( 
+      data[brain_surfaces[i] + '_verts'].flat(), 3 ) );
+    geometries[brain_surfaces[i]].computeVertexNormals();
+    geometries[brain_surfaces[i]].setAttribute(
+      'color', new THREE.Float32BufferAttribute( brain_colors, 3 ) );
+    meshes[brain_surfaces[i]] = new THREE.Mesh(
+      geometries[brain_surfaces[i]], materials['brain_surfaces'] );
+    scene.add( meshes[brain_surfaces[i]] );
+  }*/
+  renderer = new THREE.WebGLRenderer( { antialias: true } );
+  renderer.setPixelRatio( window.devicePixelRatio );
+  renderer.setSize( window.innerWidth, window.innerHeight );
+  document.body.appendChild( renderer.domElement );
+  window.addEventListener( 'resize', onWindowResize );
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize( window.innerWidth, window.innerHeight );
+}
+
+
+function animate() {
+  requestAnimationFrame( animate );
+  render();
+}
+
+function render() {
+  const time = Date.now() * 0.001;
+  const mesh_names = Object.keys(meshes);
+  for (let i = 0; i < mesh_names.length; i++) {
+    meshes[mesh_names[i]].rotation.z = time * 0.5;
+  }
+  renderer.render( scene, camera );
+}
+  
+</script>
+</html>
+

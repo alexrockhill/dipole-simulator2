@@ -31,7 +31,7 @@ fwd = mne.make_forward_solution(
     evoked.info, trans=trans, src=src, bem=bem_sol)
 
 ico = mne.surface._get_ico_surface(grade=2)['rr']
-angles = mne.transforms._cart_to_sph(ico)[:, 1:]
+angles = np.rad2deg(mne.transforms._cart_to_sph(ico)[:, 1:])
 # for the approximate angular step
 # np.rad2deg(np.min(np.linalg.norm(angles[0] - angles[1:], axis=1)))
 pd.DataFrame(dict(zip(('theta', 'phi'), angles.T))).to_csv(
@@ -82,45 +82,77 @@ for (vert_idx, angle_idx), evoked_data in tqdm(dipole_data.items()):
 
 
 # surfaces and points
+
+''' Could transform to RAS, just move camera instead
+T1 = nib.load(op.join(subjects_dir, 'sample', 'mri', 'T1.mgz'))
+ornt = nib.orientations.axcodes2ornt(
+    nib.orientations.aff2axcodes(T1.affine)).astype(int)
+ras_ornt = nib.orientations.axcodes2ornt('RAS')
+ornt_trans = nib.orientations.ornt_transform(ornt, ras_ornt)
+'''
+
+head = mne._freesurfer._get_head_surface(
+    'head', 'sample', subjects_dir)  # could be seghead for better res
+pd.DataFrame(dict(zip(('L', 'I', 'A'), head['rr'].T))).to_csv(
+    op.join('doc', '_data', 'head_verts.csv'), index=False)
+pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), head['tris'].T))).to_csv(
+    op.join('doc', '_data', 'head_tris.csv'), index=False)
+
 fwd_rr = fwd['source_rr']
 fwd_rr = mne.transforms.apply_trans(trans, fwd_rr) * 1000
-pd.DataFrame(dict(zip(('R', 'A', 'S'), fwd['source_rr'].T))).to_csv(
+pd.DataFrame(dict(zip(('L', 'I', 'A'), fwd_rr.T))).to_csv(
     op.join('doc', '_data', 'source_locs.csv'), index=False)
 
 sensor_rr = np.array([mne.transforms.apply_trans(trans, ch['loc'][:3])
                       for ch in evoked.info['chs']])
-pd.DataFrame(dict(zip(('R', 'A', 'S'), sensor_rr.T))).to_csv(
+pd.DataFrame(dict(zip(('L', 'I', 'A'), sensor_rr.T))).to_csv(
     op.join('doc', '_data', 'sensor_locs.csv'), index=False)
 
-head = mne._freesurfer._get_head_surface(
-    'head', 'sample', subjects_dir)  # could be seghead for better res
-pd.DataFrame(dict(zip(('R', 'A', 'S'), head['rr'].T))).to_csv(
-    op.join('doc', '_data', 'head_verts.csv'), index=False)
-pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), head['tris'].T))).to_csv(
-    op.join('doc', '_data', 'head_tris.csv'), index=False)
+''' Too big and missing cerebellum and subcortical
+pial_verts, pial_tris = mne.read_surface(op.join(
+   subjects_dir, 'sample', 'surf', 'lh.pial'))'''
 
 # brain surfaces, includes cerebellum and subcortical
 aseg = nib.load(op.join(subjects_dir, 'sample', 'mri', 'aseg.mgz'))
 aseg_data = np.asarray(aseg.dataobj)
 vox_mri_t = aseg.header.get_vox2ras_tkr()
+brain_rr, brain_tris = mne.surface._marching_cubes(
+    aseg_data > 0, [1], smooth=0.9)[0]
+brain_rr, brain_tris = mne.surface.decimate_surface(
+    brain_rr, brain_tris, n_triangles=5120)
+brain_rr = mne.transforms.apply_trans(vox_mri_t, brain_rr) / 1000
+pd.DataFrame(dict(zip(('L', 'I', 'A'), brain_rr.T))).to_csv(
+    op.join('doc', '_data', 'brain_verts.csv'), index=False)
+pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), brain_tris.T))).to_csv(
+    op.join('doc', '_data', 'brain_tris.csv'), index=False)
+
+''' Too big to render
 lut, fs_colors = mne._freesurfer.read_freesurfer_lut()
 lut_r = {v: k for k, v in lut.items()}
 labels = [lut_r[idx] for idx in mne.defaults.DEFAULTS['volume_label_indices']]
+labels += ['Left-Cerebral-White-Matter', 'Left-Cerebral-Cortex',
+           'Right-Cerebral-White-Matter', 'Right-Cerebral-Cortex']
 brain_surfs = mne.surface._marching_cubes(
     aseg_data, [lut[label] for label in labels], smooth=0.9)
-brain_rr = np.concatenate([surf[0] for surf in brain_surfs])
-brain_rr = mne.transforms.apply_trans(vox_mri_t, brain_rr)
-brain_tris = np.concatenate([surf[1] for surf in brain_surfs])
-# pial_verts, pial_tris = mne.read_surface(op.join(
-#    subjects_dir, 'sample', 'surf', 'lh.pial'))
-pd.DataFrame(dict(zip(('R', 'A', 'S'), brain_rr.T))).to_csv(
-    op.join('doc', '_data', 'brain_verts.csv'), index=False)  # 4 MB
-pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), brain_tris.T))).to_csv(
-    op.join('doc', '_data', 'brain_tris.csv'), index=False)  # 4 MB
+for label, surf in zip(labels, brain_surfs):
+    brain_rr, brain_tris = surf
+    brain_rr = mne.transforms.apply_trans(vox_mri_t, brain_rr) / 1000
+    pd.DataFrame(dict(zip(('L', 'I', 'A'), brain_rr.T))).to_csv(
+        op.join('doc', '_data', 'brain_surfaces',
+                label.lower() + '_verts.csv'), index=False)
+    pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), brain_tris.T))).to_csv(
+        op.join('doc', '_data', 'brain_surfaces',
+                label.lower() + '_tris.csv'), index=False)
+
+colors = np.array([fs_colors[label] / 255 for label in labels])
+pd.DataFrame(dict(zip(('R', 'G', 'B'), colors[:, :3].T)),
+             index=[label.lower() for label in labels]).to_csv(
+    op.join('doc', '_data', 'brain_surface_colors.csv'))
+'''
 
 # MEG helmet surface
 helmet = mne.surface.get_meg_helmet_surf(evoked.info, trans)
-pd.DataFrame(dict(zip(('R', 'A', 'S'), helmet['rr'].T))).to_csv(
+pd.DataFrame(dict(zip(('L', 'I', 'A'), helmet['rr'].T))).to_csv(
     op.join('doc', '_data', 'helmet_verts.csv'), index=False)
 pd.DataFrame(dict(zip(('v1', 'v2', 'v3'), helmet['tris'].T))).to_csv(
     op.join('doc', '_data', 'helmet_tris.csv'), index=False)
@@ -151,7 +183,7 @@ for ch_type in ('grad', 'mag', 'eeg'):
 
 assert not np.isnan(sensor_rr_flat).any()
 pd.DataFrame(dict(zip(('x', 'y'), sensor_rr_flat.T))).to_csv(
-    op.join('doc', '_data', 'sensors_flat_locs.csv'), index=False)
+    op.join('doc', '_data', 'sensor_flat_locs.csv'), index=False)
 
 
 # %%
