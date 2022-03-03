@@ -119,7 +119,7 @@ vox_mri_t = aseg.header.get_vox2ras_tkr()
 brain_rr, brain_tris = mne.surface._marching_cubes(
     aseg_data > 0, [1], smooth=0.9)[0]
 brain_rr, brain_tris = mne.surface.decimate_surface(
-    brain_rr, brain_tris, n_triangles=5120)
+    brain_rr, brain_tris, n_triangles=2**14)
 brain_rr = mne.transforms.apply_trans(vox_mri_t, brain_rr) / 1000
 pd.DataFrame(dict(zip(('L', 'I', 'A'), brain_rr.T))).to_csv(
     op.join('doc', '_data', 'brain_verts.csv'), index=False)
