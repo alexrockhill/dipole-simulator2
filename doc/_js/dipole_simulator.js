@@ -62,29 +62,6 @@ var dipole_idx = 10;  // index of the current dipole
 var angle_idx = 0;    // index of the current angle
 var range_idxs = {};  // store allowable indices for the ranges
 
-// WebGL info
-var programInfos;
-var buffers;
-const vsSource = `
-  attribute vec4 aVertexPosition;
-  attribute vec4 aVertexColor;
-  uniform mat4 uModelViewMatrix;
-  uniform mat4 uProjectionMatrix;
-  varying lowp vec4 vColor;
-  void main(void) {
-    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-    vColor = aVertexColor;
-  }
-`;
-
-// Fragment shader program
-const fsSource = `
-  varying lowp vec4 vColor;
-  void main(void) {
-    gl_FragColor = vColor;
-  }
-`;
-
 main();
 
 function main() {

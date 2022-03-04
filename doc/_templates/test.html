@@ -10,20 +10,15 @@
 
 <script async type="text/javascript">
   const data_dir = '../_data/';
+  const color_mode = false;
   var loaded = 0;
   var data = {};
-
-  const surfaces = ['head', 'brain'];
 
   loadCsv('head_tris', 'int');
   loadCsv('head_verts', 'float');
 
-  loadCsv('brain_tris', 'int');
-  loadCsv('brain_verts', 'float');
-
-  /*const brain_surfaces = [
-    'left-cerebral-white-matter', 'left-cerebral-cortex',
-    'right-cerebral-white-matter', 'right-cerebral-cortex',
+  const brain_surfaces = [
+    'lh-pial', 'rh-pial', 'lh-white', 'rh-white',
     'left-lateral-ventricle', 'left-inf-lat-vent',
     'left-cerebellum-cortex', 'left-thalamus-proper',
     'left-caudate', 'left-putamen', 'left-pallidum',
@@ -38,7 +33,9 @@
   brain_surfaces.forEach(name => loadCsv(name + '_verts', 'float', 'brain_surfaces/'));
   brain_surfaces.forEach(name => loadCsv(name + '_tris', 'int', 'brain_surfaces/'));
 
-  loadCsv('brain_surface_colors', 'float_dict');*/
+  loadCsv('brain_surface_colors', 'float_dict');
+
+  loadCsv('source_locs', 'float')
 
   function loadCsv(name, type, sub_dir='', solution=false) {
       /* Load a csv file into an array of rows*/
@@ -85,11 +82,11 @@
   }
 }
 </script>
-
 <script type="module">
 import * as THREE from 'three';
+import { OrbitControls } from '../_js/OrbitControls.js';
 
-let camera, scene, renderer;
+let camera, scene, renderer, controls;
 
 let meshes = {};
 
@@ -100,7 +97,8 @@ function init() {
 
   camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 10 );
   camera.position.y = -0.25;
-  camera.lookAt(0, 0, 0);
+  camera.lookAt( 0, 0, 0 );
+  camera.up.set( 0, 0, 1 );
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color( 0x050505 );
@@ -128,45 +126,75 @@ function init() {
   } );
   materials['brain'].depthWrite = false;
 
+  const surfaces = Array.prototype.concat(['head'], brain_surfaces);
+  var color, colors;
   for (let i = 0; i < surfaces.length; i++) {
+    if (surfaces[i] == 'head') {
+      colors = data['head_verts'].map(vert => [0.5, 0.5, 0.5, 0.25]).flat();
+    } else {
+      color = color_mode ? data['brain_surface_colors'].filter(
+        c => c[0] == surfaces[i])[0].slice(1) : [0.5, 0.5, 0.5];
+      colors = data[surfaces[i] + '_verts'].map(
+        vert => Array.prototype.concat(color, [0.25])).flat();
+    }
     geometries[surfaces[i]] = new THREE.BufferGeometry();
-
-    const colors = data[surfaces[i] + '_verts'].map(vert => [0.5, 0.5, 0.5, 0.25]).flat();
     geometries[surfaces[i]].setIndex( data[surfaces[i] + '_tris'].flat() );
     geometries[surfaces[i]].setAttribute( 'position', new THREE.Float32BufferAttribute( 
       data[surfaces[i] + '_verts'].flat(), 3 ) );
     geometries[surfaces[i]].computeVertexNormals();
     geometries[surfaces[i]].setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 4 ) );
     
-    meshes[surfaces[i]] = new THREE.Mesh(
-      geometries[surfaces[i]], materials['brain'] );
+    meshes[surfaces[i]] = new THREE.Mesh(geometries[surfaces[i]], materials['brain'] );
     scene.add( meshes[surfaces[i]] );
   }
 
-  /*materials['brain_surfaces'] = new THREE.MeshBasicMaterial( {
-      side: THREE.DoubleSide, vertexColors: true, wireframe: true,
-    } );
-  var brain_colors;
-  for (let i = 0; i < brain_surfaces.length; i++) {
-    geometries[brain_surfaces[i]] = new THREE.BufferGeometry();
-    brain_colors = data[brain_surfaces[i] + '_verts'].map(
-      vert => data['brain_surface_colors'].filter(
-        c => c[0] == brain_surfaces[i])[0].slice(1)).flat();
-    geometries[brain_surfaces[i]].setIndex( data[brain_surfaces[i] + '_tris'].flat() );
-    geometries[brain_surfaces[i]].setAttribute( 'position', new THREE.Float32BufferAttribute( 
-      data[brain_surfaces[i] + '_verts'].flat(), 3 ) );
-    geometries[brain_surfaces[i]].computeVertexNormals();
-    geometries[brain_surfaces[i]].setAttribute(
-      'color', new THREE.Float32BufferAttribute( brain_colors, 3 ) );
-    meshes[brain_surfaces[i]] = new THREE.Mesh(
-      geometries[brain_surfaces[i]], materials['brain_surfaces'] );
-    scene.add( meshes[brain_surfaces[i]] );
-  }*/
+  // add source locations
+  geometries['sphere'] = new THREE.SphereGeometry(0.001, 32, 16);
+  materials['sphere'] = new THREE.MeshBasicMaterial( { color: 0xffff00 } );
+  meshes['source_locs'] = [];
+  for (let i = 0; i < data['source_locs'].length; i++) {
+    meshes['source_locs'].push( new THREE.Mesh( 
+      geometries['sphere'], materials['sphere'] ));
+    meshes['source_locs'][i].position.set(...data['source_locs'][i]);
+    scene.add( meshes['source_locs'][i] )
+  }
+
+  // add dipole quiver
+  const pos = data['source_locs'][0];
+  materials['arrow'] = new THREE.MeshBasicMaterial( { color: 0x7ffc03 } );
+  const arrow_body = new THREE.CylinderGeometry( 0.001, 0.001, 0.008, 32 );
+  arrow_body.attributes['position']['array'] += 
+    Array(arrow_body.attributes['position']['count']).fill(
+      [pos[0], pos[1] + 0.004, pos[2]]).flat();
+  const arrow_head = new THREE.ConeGeometry( 0.005, 0.005, 32 );
+  arrow_head.attributes['position']['array'] += 
+    Array(arrow_head.attributes['position']['count']).fill(
+      [pos[0], pos[1] + 0.008, pos[2]]).flat();
+  geometries['arrow'] = BufferGeometryUtils.mergeBufferGeometries(
+    [arrow_head, arrow_body], false);
+  meshes['arrow'] = new THREE.Mesh(geometries['arrow'], materials['arrow']);
+  scene.add( meshes['arrow'] );
+  /*geometries['arrow'] = new THREE.CylinderGeometry( 0.001, 0.001, 0.008, 32 );
+  meshes['arrow'] = new THREE.Mesh(geometries['arrow'], materials['arrow']);
+  meshes['arrow'].position.set(pos[0], pos[1] + 0.004, pos[2]);
+  meshes['arrow'].updateMatrix();
+  scene.add( meshes['arrow'] );
+  
+  const arrow_head = new THREE.ConeGeometry( 0.005, 0.005, 32 );
+  const arrow_head_mesh = new THREE.Mesh(arrow_head, materials['arrow']);
+  arrow_head_mesh.position.set(pos[0], pos[1] + 0.008, pos[2]);
+  arrow_head_mesh.updateMatrix();
+  //scene.add( arrow_head_mesh );*/
+
+  
   renderer = new THREE.WebGLRenderer( { antialias: true } );
   renderer.setPixelRatio( window.devicePixelRatio );
   renderer.setSize( window.innerWidth, window.innerHeight );
   document.body.appendChild( renderer.domElement );
+  controls = new OrbitControls( camera, renderer.domElement );
+  controls.update();
   window.addEventListener( 'resize', onWindowResize );
+  renderer.render( scene, camera );
 }
 
 function onWindowResize() {
@@ -178,15 +206,7 @@ function onWindowResize() {
 
 function animate() {
   requestAnimationFrame( animate );
-  render();
-}
-
-function render() {
-  const time = Date.now() * 0.001;
-  const mesh_names = Object.keys(meshes);
-  for (let i = 0; i < mesh_names.length; i++) {
-    meshes[mesh_names[i]].rotation.z = time * 0.5;
-  }
+  controls.update();
   renderer.render( scene, camera );
 }
   
